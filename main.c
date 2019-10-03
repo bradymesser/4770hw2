@@ -103,7 +103,7 @@ int main(int argc, char * argv[]) {
           // calculate left and right columns
           for (int j = 1; j < ROWS - 1; j++) {
               tempColLeft[j] = mesh[j][columnIndex];
-              tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH)];
+              tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH)-1];
           }
           // send left column down one rank and right up one rank
           MPI_Send(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
@@ -157,12 +157,12 @@ void CopyNewToOld(float new[][COLS], float old[][COLS]) {
 
 void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource) {
   // pseudo code
-  if (ysource == 0) 
-      ysource = 1;
+//   if (ysource == 0) 
+//       ysource = 1;
   for (int i = 1; i < ROWS-1; i++)
       // error here, only works for 2 processes (ysource + COLUMN_WIDTH - 1) *** I THINK I FIXED IT
-    for (int j = ysource; j < ysource + COLUMN_WIDTH - 1; j++)
-      if (j != 0)
+    for (int j = ysource; j < ysource + COLUMN_WIDTH; j++)
+      if (j != 0 && j!= COLS - 1)
           new[i][j] = 0.25*(old[i-1][j]+old[i+1][j]+old[i][j-1]+old[i][j+1]);
 }
 

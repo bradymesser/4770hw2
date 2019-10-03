@@ -1,5 +1,6 @@
 program = main.c
 programName = main
+
 default:
 	mpicc $(program) -o $(programName)
 
@@ -25,7 +26,6 @@ module:
 test:
 	make default
 	mpirun -np 1 --mca mpi_cuda_support 0 $(programName)
-	mpirun -np 4 --mca mpi_cuda_support 0 $(programName)
 
 16:
 	mpicc $(program) -o $(programName)

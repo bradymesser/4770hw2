@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-int ROWS = 1000
+int ROWS = 1000;
 int COLS = 1000;
 
 // function prototypes

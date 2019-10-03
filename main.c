@@ -63,11 +63,11 @@ int main(int argc, char * argv[]) {
     mesh[0][i] = 300.0;
   }
   
-  int columnIndex = 0;
+  int columnIndex = 0;  // columnIndex is the starting index of this processes column range
   columnIndex = myrank * COLUMN_WIDTH;
   float tempColLeft[ROWS];
   float tempColRight[ROWS];
-  float sendSize = 1;
+  float sendSize = ROWS;
     
   for (int i = 0; i < ITERATIONS; i++) {
       if (myrank == 0) {
@@ -157,10 +157,11 @@ void CopyNewToOld(float new[][COLS], float old[][COLS]) {
 
 void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource) {
   // pseudo code
-  
+  if (ysource == 0) 
+      ysource = 1;
   for (int i = 1; i < ROWS-1; i++)
       // error here, only works for 2 processes (ysource + COLUMN_WIDTH - 1) *** I THINK I FIXED IT
-    for (int j = ysource; j < ysource + COLUMN_WIDTH; j++)
+    for (int j = ysource; j < ysource + COLUMN_WIDTH - 1; j++)
       if (j != 0)
           new[i][j] = 0.25*(old[i-1][j]+old[i+1][j]+old[i][j-1]+old[i][j+1]);
 }

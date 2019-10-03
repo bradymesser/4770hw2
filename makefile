@@ -26,7 +26,7 @@ module:
 
 test:
 	make default
-	mpirun -np 2 --mca mpi_cuda_support 0 $(programName)
+	mpirun -np 4 --mca mpi_cuda_support 0 $(programName) 12 12 1000
 
 16:
 	mpicc $(program) -o $(programName)

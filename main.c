@@ -14,8 +14,8 @@
 #define BROWN    "03 03 00 "
 #define BLACK    "00 00 00 "
 
-int ROWS = 300;
-int COLS = 300;
+int ROWS = 10;
+int COLS = 10;
 int ITERATIONS = 1000;
 int COLUMN_WIDTH = 0;
 const int send_tag = 0;
@@ -36,16 +36,15 @@ int main(int argc, char * argv[]) {
   MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
   MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     
-  if (myrank == 0) {
-      if (argc != 4) {
-        printf("Invalid usage, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
-        printf("Valid usage is ./main ROWS COLS ITERATIONS\n");
-      } else {
-        ROWS = atoi(argv[1]);
-        COLS = atoi(argv[2]);
-        ITERATIONS = atoi(argv[3]);
-      }
+  if (argc != 4) {
+    printf("Invalid usage, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
+    printf("Valid usage is ./main ROWS COLS ITERATIONS\n");
+  } else {
+    ROWS = atoi(argv[1]);
+    COLS = atoi(argv[2]);
+    ITERATIONS = atoi(argv[3]);
   }
+  
     
   COLUMN_WIDTH = COLS / numprocs;
   
@@ -68,7 +67,8 @@ int main(int argc, char * argv[]) {
   columnIndex = myrank * COLUMN_WIDTH;
   float tempColLeft[ROWS];
   float tempColRight[ROWS];
-  printf("DEBUG\n");
+  float sendSize = 1;
+    
   for (int i = 0; i < ITERATIONS; i++) {
       if (myrank == 0) {
           // calculate right column
@@ -76,12 +76,13 @@ int main(int argc, char * argv[]) {
               tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH) - 1];
           }
           //send only right most column
-          MPI_Send(&tempColRight, ROWS, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
+          MPI_Send(&tempColRight, sendSize, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
           // receive only right most column
-          MPI_Recv(&tempColRight, ROWS, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          MPI_Recv(&tempColRight, sendSize, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
           // update mesh with right most column
           for (int j = 1; j < ROWS - 1; j++) {
-              mesh[j][(columnIndex + COLUMN_WIDTH) - 1] = tempColRight[j];
+              // columnIndex + COLUMN_WIDTH gives you the column neighboring this one
+              mesh[j][(columnIndex + COLUMN_WIDTH)] = tempColRight[j];
           }
       }
       else if (myrank == numprocs - 1) {
@@ -90,37 +91,57 @@ int main(int argc, char * argv[]) {
               tempColLeft[j] = mesh[j][columnIndex];
           }
           //send only left most column
-          MPI_Send(&tempColLeft, ROWS, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
+          MPI_Send(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
           // receive only left most
-          MPI_Recv(&tempColLeft, ROWS, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          MPI_Recv(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
           // update mesh with left most column
           for (int j = 1; j < ROWS - 1; j++) {
-              mesh[j][columnIndex] = tempColLeft[j];
+              mesh[j][columnIndex-1] = tempColLeft[j];
           }
       }
       else { 
           // calculate left and right columns
           for (int j = 1; j < ROWS - 1; j++) {
               tempColLeft[j] = mesh[j][columnIndex];
-              tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH) - 1];
+              tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH)];
           }
           // send left column down one rank and right up one rank
-          MPI_Send(&tempColLeft, ROWS, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
-          MPI_Send(&tempColRight, ROWS, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
+          MPI_Send(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
+          MPI_Send(&tempColRight, sendSize, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
           // receive left and right columns
-          MPI_Recv(&tempColLeft, ROWS, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-          MPI_Recv(&tempColRight, ROWS, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          MPI_Recv(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          MPI_Recv(&tempColRight, sendSize, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
           // update mesh with left and right most
           for (int j = 1; j < ROWS - 1; j++) {
-              mesh[j][columnIndex] = tempColLeft[j];
-              mesh[j][(columnIndex + COLUMN_WIDTH) - 1] = tempColRight[j];
+              mesh[j][columnIndex-1] = tempColLeft[j];
+              mesh[j][(columnIndex + COLUMN_WIDTH)] = tempColRight[j];
           }
       }
       
       CopyNewToOld(mesh, old);
       CalculateNew(mesh, old, 0, columnIndex); 
   }
-  printColors(mesh);
+  if (myrank > 0) 
+      MPI_Barrier(MPI_COMM_WORLD);
+  if (myrank > 1)
+      MPI_Barrier(MPI_COMM_WORLD);
+  if (myrank > 2)
+      MPI_Barrier(MPI_COMM_WORLD);
+
+  printf("Process %d\n", myrank);
+  for (int i = 0; i < ROWS; i++) {
+      for (int j = 0; j < COLS; j++) {
+          printf("%5.1f ", mesh[i][j]);
+      }
+      printf("\n");
+  }
+//   if (myrank == 0) {
+      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(MPI_COMM_WORLD);
+//       printColors(mesh);
+//   }
+//   printColors(mesh);
   MPI_Finalize();
   return 0;
 }
@@ -136,9 +157,12 @@ void CopyNewToOld(float new[][COLS], float old[][COLS]) {
 
 void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource) {
   // pseudo code
-  for (int i = xsource; i < ROWS-1; i++)
+  
+  for (int i = 1; i < ROWS-1; i++)
+      // error here, only works for 2 processes (ysource + COLUMN_WIDTH - 1) *** I THINK I FIXED IT
     for (int j = ysource; j < ysource + COLUMN_WIDTH; j++)
-      new[i][j] = 0.25*(old[i-1][j]+old[i+1][j]+old[i][j-1]+old[i][j+1]);
+      if (j != 0)
+          new[i][j] = 0.25*(old[i-1][j]+old[i+1][j]+old[i][j-1]+old[i][j+1]);
 }
 
 void PrintGrid(float grid[][COLS], int xsource, int ysource) {

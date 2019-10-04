@@ -36,7 +36,8 @@ int main(int argc, char * argv[]) {
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
   MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-    
+  double startTime = MPI_Wtime();
+
   if (argc != 4) {
     printf("Invalid usage, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
     printf("Valid usage is ./main ROWS COLS ITERATIONS\n");
@@ -122,6 +123,8 @@ int main(int argc, char * argv[]) {
       CopyNewToOld(mesh, old);
       CalculateNew(mesh, old, 0, columnIndex); 
   }
+    double calculationEndTime = MPI_Wtime();
+    printf("Process %d finished calculations in %f seconds\n",myrank,calculationEndTime - startTime);
     float tempMesh[ROWS][COLS];
     if (myrank != 0)  {
         MPI_Send(&mesh, ROWS*COLS, MPI_FLOAT, 0, send_tag, MPI_COMM_WORLD);
@@ -130,29 +133,15 @@ int main(int argc, char * argv[]) {
             MPI_Recv(&tempMesh, ROWS*COLS, MPI_FLOAT, j, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             mergeMesh(mesh, tempMesh, j);
         }
+    double mergeTime = MPI_Wtime();
+    printf("Merging took %f seconds\n", mergeTime-calculationEndTime);
     printColors(mesh);
+    printf("Printing took %f seconds\n", MPI_Wtime() - mergeTime);
     }
-//   if (myrank > 0) 
-//       MPI_Barrier(MPI_COMM_WORLD);
-//   if (myrank > 1)
-//       MPI_Barrier(MPI_COMM_WORLD);
-//   if (myrank > 2)
-//       MPI_Barrier(MPI_COMM_WORLD);
-
-//   printf("Process %d\n", myrank);
-//   for (int i = 0; i < ROWS; i++) {
-//       for (int j = 0; j < COLS; j++) {
-//           printf("%5.1f ", mesh[i][j]);
-//       }
-//       printf("\n");
-//   }
-// //   if (myrank == 0) {
-//       MPI_Barrier(MPI_COMM_WORLD);
-//       MPI_Barrier(MPI_COMM_WORLD);
-//       MPI_Barrier(MPI_COMM_WORLD);
-//       printColors(mesh);
-//   }
-//   printColors(mesh);
+  if (myrank == 0) {
+      double finalTime = MPI_Wtime();
+      printf("Total time %f seconds\n", finalTime-startTime);
+  }
   MPI_Finalize();
   return 0;
 }

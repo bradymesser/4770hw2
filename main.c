@@ -25,6 +25,7 @@ void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource
 void PrintGrid(float grid[][COLS], int xsource, int ysource);
 void printColors(float mesh[][COLS]);
 void copyBoundaryColumns(float new[][COLS], float old[ROWS], int columnIndex);
+void mergeMesh(float mesh[][COLS], float tempMesh[][COLS], int rank);
 
 int main(int argc, char * argv[]) {
   MPI_Status status;
@@ -121,24 +122,34 @@ int main(int argc, char * argv[]) {
       CopyNewToOld(mesh, old);
       CalculateNew(mesh, old, 0, columnIndex); 
   }
-  if (myrank > 0) 
-      MPI_Barrier(MPI_COMM_WORLD);
-  if (myrank > 1)
-      MPI_Barrier(MPI_COMM_WORLD);
-  if (myrank > 2)
-      MPI_Barrier(MPI_COMM_WORLD);
+    float tempMesh[ROWS][COLS];
+    if (myrank != 0)  {
+        MPI_Send(&mesh, ROWS*COLS, MPI_FLOAT, 0, send_tag, MPI_COMM_WORLD);
+    } else {
+        for (int j = 1; j < numprocs; j++) {
+            MPI_Recv(&tempMesh, ROWS*COLS, MPI_FLOAT, j, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            mergeMesh(mesh, tempMesh, j);
+        }
+    printColors(mesh);
+    }
+//   if (myrank > 0) 
+//       MPI_Barrier(MPI_COMM_WORLD);
+//   if (myrank > 1)
+//       MPI_Barrier(MPI_COMM_WORLD);
+//   if (myrank > 2)
+//       MPI_Barrier(MPI_COMM_WORLD);
 
-  printf("Process %d\n", myrank);
-  for (int i = 0; i < ROWS; i++) {
-      for (int j = 0; j < COLS; j++) {
-          printf("%5.1f ", mesh[i][j]);
-      }
-      printf("\n");
-  }
-//   if (myrank == 0) {
-      MPI_Barrier(MPI_COMM_WORLD);
-      MPI_Barrier(MPI_COMM_WORLD);
-      MPI_Barrier(MPI_COMM_WORLD);
+//   printf("Process %d\n", myrank);
+//   for (int i = 0; i < ROWS; i++) {
+//       for (int j = 0; j < COLS; j++) {
+//           printf("%5.1f ", mesh[i][j]);
+//       }
+//       printf("\n");
+//   }
+// //   if (myrank == 0) {
+//       MPI_Barrier(MPI_COMM_WORLD);
+//       MPI_Barrier(MPI_COMM_WORLD);
+//       MPI_Barrier(MPI_COMM_WORLD);
 //       printColors(mesh);
 //   }
 //   printColors(mesh);
@@ -227,4 +238,13 @@ void printColors(float mesh[][COLS]) {
       in a web browser. */ 
    /*   system("convert c.pnm c.png"); */
    system("convert c.pnm c.gif"); 
+}
+
+void mergeMesh(float mesh[][COLS], float tempMesh[][COLS], int rank) {
+    int columnIndex = rank * COLUMN_WIDTH;
+    for (int i = 1; i < ROWS - 1; i++) {
+        for (int j = columnIndex; j < columnIndex+COLUMN_WIDTH; j++) {
+            mesh[i][j] = tempMesh[i][j];
+        }
+    }
 }

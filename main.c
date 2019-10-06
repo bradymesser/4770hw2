@@ -14,23 +14,22 @@
 #define BROWN    "03 03 00 "
 #define BLACK    "00 00 00 "
 
-int ROWS = 10;
-int COLS = 10;
+int ROWS = 480;
+int COLS = 480;
 int ITERATIONS = 1000;
-int COLUMN_WIDTH = 0;
+int ROW_HEIGHT = 0;
 const int send_tag = 0;
+
 // function prototypes
 void CopyNewToOld(float new[][COLS], float old[][COLS]);
 void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource);
-void PrintGrid(float grid[][COLS], int xsource, int ysource);
 void printColors(float mesh[][COLS]);
-void copyBoundaryColumns(float new[][COLS], float old[ROWS], int columnIndex);
 void mergeMesh(float mesh[][COLS], float tempMesh[][COLS], int rank);
 
 int main(int argc, char * argv[]) {
   MPI_Status status;
  
-  int myrank;
+  int myrank;  // The PID of the process
   int numprocs;
   
   MPI_Init(&argc, &argv);
@@ -39,8 +38,10 @@ int main(int argc, char * argv[]) {
   double startTime = MPI_Wtime();
 
   if (argc != 4) {
-    printf("Invalid usage, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
-    printf("Valid usage is ./main ROWS COLS ITERATIONS\n");
+    if (myrank == 0) {
+        printf("Invalid usage, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
+        printf("Valid usage is ./main ROWS COLS ITERATIONS\n");
+    }
   } else {
     ROWS = atoi(argv[1]);
     COLS = atoi(argv[2]);
@@ -48,11 +49,12 @@ int main(int argc, char * argv[]) {
   }
   
     
-  COLUMN_WIDTH = COLS / numprocs;
+  ROW_HEIGHT = ROWS / numprocs;  // The size of each processes row range
   
   float mesh[ROWS][COLS];
   float old[ROWS][COLS];
   float fireplaceWidth = .4 * COLS;
+    
   // Initialize the mesh to 20.0 degrees celsius, the edges will stay fixed at this temperature
   for (int i = 0; i < ROWS; i++) {
     for (int j = 0; j < COLS; j++) {
@@ -65,67 +67,68 @@ int main(int argc, char * argv[]) {
     mesh[0][i] = 300.0;
   }
   
-  int columnIndex = 0;  // columnIndex is the starting index of this processes column range
-  columnIndex = myrank * COLUMN_WIDTH;
-  float tempColLeft[ROWS];
-  float tempColRight[ROWS];
+  int rowIndex = 0;  // rowIndex is the starting row index of this processes row range
+  rowIndex = myrank * ROW_HEIGHT;
+  float tempRowTop[COLS];  // 
+  float tempRowBottom[COLS];
   float sendSize = ROWS;
     
   for (int i = 0; i < ITERATIONS; i++) {
       if (myrank == 0) {
-          // calculate right column
-          for (int j = 1; j < ROWS - 1; j++) {
-              tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH) - 1];
+          // calculate bottom row
+          for (int j = 1; j < COLS - 1; j++) {
+              tempRowBottom[j] = mesh[(rowIndex + ROW_HEIGHT) - 1][j];
           }
-          //send only right most column
-          MPI_Send(&tempColRight, sendSize, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
-          // receive only right most column
-          MPI_Recv(&tempColRight, sendSize, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-          // update mesh with right most column
-          for (int j = 1; j < ROWS - 1; j++) {
-              // columnIndex + COLUMN_WIDTH gives you the column neighboring this one
-              mesh[j][(columnIndex + COLUMN_WIDTH)] = tempColRight[j];
+          //send only bottom most column
+          MPI_Send(&tempRowBottom, sendSize, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
+          // receive only bottom + 1 column
+          MPI_Recv(&tempRowBottom, sendSize, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          // update mesh with bottom + 1 column
+          for (int j = 1; j < COLS - 1; j++) {
+              // rowIndex + ROW_HEIGHT gives you the row neighboring this section
+              mesh[(rowIndex + ROW_HEIGHT)][j] = tempRowBottom[j];
           }
       }
       else if (myrank == numprocs - 1) {
-          // calculate left column
-          for (int j = 1; j < ROWS - 1; j++) {
-              tempColLeft[j] = mesh[j][columnIndex];
+          // calculate top row
+          for (int j = 1; j < COLS - 1; j++) {
+              tempRowTop[j] = mesh[rowIndex][j];
           }
-          //send only left most column
-          MPI_Send(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
-          // receive only left most
-          MPI_Recv(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-          // update mesh with left most column
-          for (int j = 1; j < ROWS - 1; j++) {
-              mesh[j][columnIndex-1] = tempColLeft[j];
+          //send only top most row
+          MPI_Send(&tempRowTop, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
+          // receive only top - 1 row
+          MPI_Recv(&tempRowTop, sendSize, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          // update mesh with top - 1 row
+          for (int j = 1; j < COLS - 1; j++) {
+              mesh[rowIndex-1][j] = tempRowTop[j];
           }
       }
       else { 
-          // calculate left and right columns
-          for (int j = 1; j < ROWS - 1; j++) {
-              tempColLeft[j] = mesh[j][columnIndex];
-              tempColRight[j] = mesh[j][(columnIndex + COLUMN_WIDTH)-1];
+          // calculate top and bottom rows
+          for (int j = 1; j < COLS - 1; j++) {
+              tempRowTop[j] = mesh[rowIndex][j];
+              tempRowBottom[j] = mesh[(rowIndex + ROW_HEIGHT)-1][j];
           }
-          // send left column down one rank and right up one rank
-          MPI_Send(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
-          MPI_Send(&tempColRight, sendSize, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
-          // receive left and right columns
-          MPI_Recv(&tempColLeft, sendSize, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-          MPI_Recv(&tempColRight, sendSize, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-          // update mesh with left and right most
-          for (int j = 1; j < ROWS - 1; j++) {
-              mesh[j][columnIndex-1] = tempColLeft[j];
-              mesh[j][(columnIndex + COLUMN_WIDTH)] = tempColRight[j];
+          // send top row down one rank and bottom up one rank
+          MPI_Send(&tempRowTop, sendSize, MPI_FLOAT, myrank - 1,send_tag, MPI_COMM_WORLD);
+          MPI_Send(&tempRowBottom, sendSize, MPI_FLOAT, myrank + 1,send_tag, MPI_COMM_WORLD);
+          // receive top and bottom rows
+          MPI_Recv(&tempRowTop, sendSize, MPI_FLOAT, myrank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          MPI_Recv(&tempRowBottom, sendSize, MPI_FLOAT, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+          // update mesh with top and bottom rows
+          for (int j = 1; j < COLS - 1; j++) {
+              mesh[rowIndex-1][j] = tempRowTop[j];
+              mesh[(rowIndex + ROW_HEIGHT)][j] = tempRowBottom[j];
           }
       }
       
       CopyNewToOld(mesh, old);
-      CalculateNew(mesh, old, 0, columnIndex); 
+      CalculateNew(mesh, old, rowIndex, 0); 
   }
     double calculationEndTime = MPI_Wtime();
     printf("Process %d finished calculations in %f seconds\n",myrank,calculationEndTime - startTime);
     float tempMesh[ROWS][COLS];
+    
     if (myrank != 0)  {
         MPI_Send(&mesh, ROWS*COLS, MPI_FLOAT, 0, send_tag, MPI_COMM_WORLD);
     } else {
@@ -138,10 +141,12 @@ int main(int argc, char * argv[]) {
     printColors(mesh);
     printf("Printing took %f seconds\n", MPI_Wtime() - mergeTime);
     }
+    
   if (myrank == 0) {
       double finalTime = MPI_Wtime();
       printf("Total time %f seconds\n", finalTime-startTime);
   }
+    
   MPI_Finalize();
   return 0;
 }
@@ -156,18 +161,11 @@ void CopyNewToOld(float new[][COLS], float old[][COLS]) {
 }
 
 void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource) {
-  // pseudo code
-//   if (ysource == 0) 
-//       ysource = 1;
-  for (int i = 1; i < ROWS-1; i++)
-      // error here, only works for 2 processes (ysource + COLUMN_WIDTH - 1) *** I THINK I FIXED IT
-    for (int j = ysource; j < ysource + COLUMN_WIDTH; j++)
-      if (j != 0 && j!= COLS - 1)
+ 
+  for (int i = xsource; i < xsource + ROW_HEIGHT; i++)
+    for (int j = 1; j < COLS-1; j++)
+      if (i != 0 && i!= ROWS - 1)
           new[i][j] = 0.25*(old[i-1][j]+old[i+1][j]+old[i][j-1]+old[i][j+1]);
-}
-
-void PrintGrid(float grid[][COLS], int xsource, int ysource) {
-
 }
 
 void printColors(float mesh[][COLS]) {
@@ -230,9 +228,9 @@ void printColors(float mesh[][COLS]) {
 }
 
 void mergeMesh(float mesh[][COLS], float tempMesh[][COLS], int rank) {
-    int columnIndex = rank * COLUMN_WIDTH;
-    for (int i = 1; i < ROWS - 1; i++) {
-        for (int j = columnIndex; j < columnIndex+COLUMN_WIDTH; j++) {
+    int rowIndex = rank * ROW_HEIGHT;
+    for (int i = rowIndex; i < rowIndex+ROW_HEIGHT; i++) {
+        for (int j = 1; j < COLS-1; j++) {
             mesh[i][j] = tempMesh[i][j];
         }
     }

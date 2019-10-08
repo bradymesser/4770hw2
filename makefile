@@ -31,3 +31,7 @@ test:
 16:
 	mpicc $(program) -o $(programName)
 	mpirun -np 16 --mca mpi_cuda_support 0 $(programName)
+
+sequential:
+	gcc sequential.c -o sequential
+	./sequential

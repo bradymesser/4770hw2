@@ -36,6 +36,20 @@ void CalculateNew(float new[][COLS], float old[][COLS], int xsource, int ysource
 void printColors(float mesh[][COLS]);
 void mergeMesh(float mesh[][COLS], float tempMesh[][COLS], int rank);
 
+// these seqential functions are included for when the parallelized code is ran with 1 process
+void CopyNewToOldSequential(float new[][COLS], float old[][COLS]) {
+    for (int i = 0; i < ROWS; i++) 
+        for (int j = 0; j < COLS; j++) 
+            old[i][j] = new[i][j];
+}
+
+// these seqential functions are included for when the parallelized code is ran with 1 process
+void CalculateNewSequential(float new[][COLS], float old[][COLS], int xsource, int ysource ) {
+  for (int i = 1; i < ROWS-1; i++)
+    for (int j = 1; j < COLS-1; j++)
+      new[i][j] = 0.25*(old[i-1][j]+old[i+1][j]+old[i][j-1]+old[i][j+1]);
+}
+
 int main(int argc, char * argv[]) {
   MPI_Status status;
    
@@ -46,7 +60,7 @@ int main(int argc, char * argv[]) {
 
   if (argc != 4) {
     if (myrank == 0) {
-        printf("Invalid usage, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
+        printf("Parameters not specified, using default values: %dx%d with %d iterations.\n",ROWS,COLS, ITERATIONS);
         printf("Valid usage is ./main ROWS COLS ITERATIONS\n");
     }
   } else {
@@ -84,13 +98,24 @@ int main(int argc, char * argv[]) {
   float tempRowBottom[COLS];
   float sendSize = COLS;
     
+  if (numprocs == 1) {
+      for (int i = 0; i < ITERATIONS; i++) {
+          CopyNewToOldSequential(mesh,old);
+          CalculateNewSequential(mesh, old, 0, 0);
+      }
+      printColors(mesh);
+      double finalTime = MPI_Wtime();
+      printf("Total time %f seconds\n", finalTime-startTime);
+      MPI_Finalize();
+      return 0;
+  }
   for (int i = 0; i < ITERATIONS; i++) {
       if (myrank == 0) {
-          //send only bottom most column
+          //send only bottom most row
           MPI_Send(&mesh[rowIndex+ROW_HEIGHT-1], 1, rowType, myrank + 1,send_tag, MPI_COMM_WORLD);
-          // receive only bottom + 1 column
+          // receive only bottom + 1 row
           MPI_Recv(&tempRowBottom, 1, rowType, myrank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-          // update mesh with bottom + 1 column
+          // update mesh with bottom + 1 row
           for (int j = 1; j < COLS - 1; j++) {
               // rowIndex + ROW_HEIGHT gives you the row neighboring this section
               mesh[(rowIndex + ROW_HEIGHT)][j] = tempRowBottom[j];

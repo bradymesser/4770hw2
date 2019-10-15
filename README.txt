@@ -12,7 +12,7 @@ Compilation Instructions for Parallel Optimization:
 : make init16
 
 # Team Roles
-# Note group coding was done for all parts of project
+# *Note* Group coding was done for all parts of project
 
 
 - Brady Messer
